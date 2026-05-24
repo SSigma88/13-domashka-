@@ -3,112 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ДЗ 13 - Надійний AR</title>
-    
+    <title>ДЗ 13 - AR у довкіллі</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+</head>
+<body style="margin: 0; overflow: hidden;">
 
     <script>
-        AFRAME.registerComponent('ar-app-logic', {
+        // Регистрируем компонент для отслеживания тапов по экрану (событий контроллера)
+        AFRAME.registerComponent('ar-tap-placer', {
             init: function () {
-                this.models = ['#avatarModel', '#glasses1Model', '#glasses2Model'];
-                this.reticleEl = document.querySelector('#ar-reticle');
-                
-                // Чіткий початковий статус
-                this.updateState("Натисніть 'VR' (на ПК) для запуску.");
+                const sceneEl = this.el;
+                // Массив с ID твоих моделей
+                const models = ['#avatarModel', '#glasses1Model', '#glasses2Model'];
 
-                // Чекаємо на запуск сесії
-                this.el.addEventListener('enter-vr', () => {
-                    if (this.el.is('ar-mode')) {
-                        // Якщо це телефон і є кнопка AR, починаємо AR логіку
-                        this.startArApp();
-                    } else {
-                        // Якщо це ПК або немає AR підтримки, це VR режим
-                        this.updateState("Запуск VR. Спробуйте 'AR' на телефоні.");
-                    }
-                });
-            },
-            startArApp: function () {
-                // Пряме використання нативного WebXR hit-test. Найнадійніший спосіб.
-                if (!this.el.xrSession) { this.updateState("Помилка! WebXR не завантажився."); return; }
-                const session = this.el.xrSession;
+                // Ждем, пока пользователь зайдет в режим дополненной реальности (AR)
+                sceneEl.addEventListener('enter-vr', () => {
+                    if (!sceneEl.is('ar-mode')) return;
 
-                // Перевіряємо, чи hit-test підтримується (обов'язково для цієї домашки)
-                if (!('requestHitTestSource' in session)) {
-                    this.updateState("Помилка! Hit-test не підтримується на цьому пристрої.");
-                    return;
-                }
+                    // Получаем текущую WebXR сессию
+                    const session = sceneEl.xrSession;
+                    
+                    // 'select' — это стандартное событие WebXR для контроллера (в данном случае, тап по тачскрину)
+                    session.addEventListener('select', () => {
+                        const reticle = document.querySelector('#ar-reticle');
 
-                this.updateState("Шукаю підлогу. Наведіть камеру.");
+                        // Спавним объект только если прицел нашел реальную поверхность в комнате
+                        if (reticle && reticle.getAttribute('visible')) {
+                            const newModel = document.createElement('a-entity');
 
-                // Налаштовуємо нативний hit-test
-                session.requestReferenceSpace('local').then((localSpace) => {
-                    this.localSpace = localSpace;
-                });
-                session.requestReferenceSpace('viewer').then((viewerSpace) => {
-                    session.requestHitTestSource({ space: viewerSpace }).then((hitTestSource) => {
-                        this.hitTestSource = hitTestSource;
+                            // Выбираем случайную модель из массива
+                            const randomIndex = Math.floor(Math.random() * models.length);
+                            const selectedModel = models[randomIndex];
+                            
+                            // Применяем параметры к новому элементу
+                            newModel.setAttribute('gltf-model', selectedModel);
+
+                            // Копируем координаты из точки, куда указывает прицел на полу/столе
+                            const position = reticle.object3D.position;
+                            newModel.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+
+                            // Базовый масштаб моделей (если они окажутся гигантскими или крошечными, поправь эти цифры)
+                            newModel.setAttribute('scale', '0.3 0.3 0.3');
+
+                            // Добавляем модель на сцену
+                            sceneEl.appendChild(newModel);
+                        }
                     });
                 });
-
-                // Спавн моделей по тапу (подія 'select' нативного WebXR)
-                session.addEventListener('select', this.onSelect.bind(this));
-
-                // Оновлюємо положення прицілу в tick() циклі. Це набагато надійніше, ніж ar-hit-test
-                this.tick = (function() {
-                    let frame = this.el.xrFrame;
-                    if (frame && this.hitTestSource && this.localSpace) {
-                        const hitTestResults = frame.getHitTestResults(this.hitTestSource);
-                        if (hitTestResults.length > 0) {
-                            const hit = hitTestResults[0];
-                            const pose = hit.getPose(this.localSpace);
-                            
-                            // Встановлюємо позицію прицілу на підлозі
-                            this.reticleEl.setAttribute('position', pose.transform.position);
-                            this.reticleEl.setAttribute('visible', true);
-                            this.updateState("Підлога знайдена. Тапніть, щоб поставити модель.");
-                        } else {
-                            // Якщо підлога не знайдена, ховаємо приціл
-                            this.reticleEl.setAttribute('visible', false);
-                            this.updateState("Шукаю підлогу. Наведіть камеру вниз.");
-                        }
-                    }
-                }).bind(this);
-                
-                // Додаємо tick loop. Тепер A-Frame не падає, а ми маємо повний контроль.
-                this.el.addEventListener('tick', this.tick);
-            },
-            onSelect: function() {
-                // Спавнимо модель тільки якщо приціл видимий (тобто ми знаємо де підлога)
-                if (this.reticleEl.getAttribute('visible')) {
-                    const newModel = document.createElement('a-entity');
-                    const randomIndex = Math.floor(Math.random() * this.models.length);
-                    newModel.setAttribute('gltf-model', this.models[randomIndex]);
-                    
-                    const position = this.reticleEl.getAttribute('position');
-                    newModel.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
-                    
-                    // Базовий масштаб моделей
-                    newModel.setAttribute('scale', '0.2 0.2 0.2');
-                    
-                    // Додаємо на сцену
-                    this.el.appendChild(newModel);
-                    this.updateState("Модель спавниться!");
-                }
-            },
-            updateState: function(text) {
-                // Великий, помітний напис статусу
-                document.getElementById('app-state').innerText = text;
             }
         });
     </script>
-</head>
-<body style="margin: 0; overflow: hidden; background-color: #111;">
 
-    <div id="app-state" style="position: absolute; top: 30%; left: 10%; width: 80%; z-index: 99999; background: rgba(0, 0, 0, 0.8); color: lime; font-family: sans-serif; font-size: 24px; font-weight: bold; text-align: center; padding: 20px; box-sizing: border-box; border: 3px solid lime; border-radius: 10px; pointer-events: none;">
-        Очікування...
-    </div>
-
-    <a-scene webxr="optionalFeatures: hit-test;" ar-app-logic>
+    <a-scene webxr="requiredFeatures: hit-test;" ar-tap-placer embedded>
         
         <a-assets>
             <a-asset-item id="avatarModel" src="avatar.glb"></a-asset-item>
@@ -116,14 +62,11 @@
             <a-asset-item id="glasses2Model" src="glasses2.glb"></a-asset-item>
         </a-assets>
 
-        <a-sky color="#ECECEC"></a-sky>
-        <a-box position="0 1 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
-
         <a-entity id="ar-reticle" 
+                  ar-hit-test="requiredFeatures: hit-test;" 
                   geometry="primitive: ring; radiusInner: 0.04; radiusOuter: 0.06" 
                   material="color: #00FF00; shader: flat" 
-                  rotation="-90 0 0"
-                  visible="false">
+                  rotation="-90 0 0">
         </a-entity>
 
         <a-camera position="0 1.6 0"></a-camera>
