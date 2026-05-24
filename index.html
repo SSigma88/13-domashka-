@@ -24,7 +24,7 @@
     </div>
 
     <script>
-        // Реєстрація нашого компоненту для тапів
+        // Реєстрація компонента для розстановки моделей по тапу
         AFRAME.registerComponent('ar-tap-placer', {
             init: function () {
                 const sceneEl = this.el;
@@ -48,7 +48,7 @@
                             
                             const position = reticle.object3D.position;
                             newModel.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
-                            newModel.setAttribute('scale', '0.2 0.2 0.2');
+                            newModel.setAttribute('scale', '0.2 0.2 0.2'); // Масштаб моделей
 
                             sceneEl.appendChild(newModel);
                         }
@@ -58,7 +58,7 @@
         });
     </script>
 
-    <a-scene webxr="requiredFeatures: hit-test;" ar-tap-placer>
+    <a-scene webxr="optionalFeatures: hit-test;" ar-tap-placer>
         
         <a-assets>
             <a-asset-item id="avatarModel" src="avatar.glb"></a-asset-item>
