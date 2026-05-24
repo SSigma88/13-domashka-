@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR у довкіллі</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+</head>
+<body style="margin: 0; overflow: hidden;">
+
+    <script>
+        AFRAME.registerComponent('ar-tap-placer', {
+            init: function () {
+                const sceneEl = this.el;
+                // Массив с ID твоих моделей
+                const models = ['#avatarModel', '#glasses1Model', '#glasses2Model'];
+
+                // Ждем, пока пользователь зайдет в режим дополненной реальности (AR)
+                sceneEl.addEventListener('enter-vr', () => {
+                    if (!sceneEl.is('ar-mode')) return;
+
+                    // Получаем текущую WebXR сессию
+                    const session = sceneEl.xrSession;
+                    
+                    // 'select' — это стандартное событие WebXR для контроллера (в данном случае, тап по тачскрину)
+                    session.addEventListener('select', () => {
+                        const reticle = document.querySelector('#ar-reticle');
+
+                        // Спавним объект только если прицел нашел реальную поверхность в комнате
+                        if (reticle && reticle.getAttribute('visible')) {
+                            const newModel = document.createElement('a-entity');
+
+                            // Выбираем случайную модель из массива
+                            const randomIndex = Math.floor(Math.random() * models.length);
+                            const selectedModel = models[randomIndex];
+                            
+                            // Применяем параметры к новому элементу
+                            newModel.setAttribute('gltf-model', selectedModel);
+
+                            // Копируем координаты из точки, куда указывает прицел на полу/столе
+                            const position = reticle.object3D.position;
+                            newModel.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+
+                            // Базовый масштаб моделей (если они окажутся гигантскими или крошечными, поправь эти цифры)
+                            newModel.setAttribute('scale', '0.3 0.3 0.3');
+
+                            // Добавляем модель на сцену
+                            sceneEl.appendChild(newModel);
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+
+    <a-scene webxr="requiredFeatures: hit-test;" ar-tap-placer embedded>
+        
+        <a-assets>
+            <a-asset-item id="avatarModel" src="avatar.glb"></a-asset-item>
+            <a-asset-item id="glasses1Model" src="glasses1.glb"></a-asset-item>
+            <a-asset-item id="glasses2Model" src="glasses2.glb"></a-asset-item>
+        </a-assets>
+
+        <a-entity id="ar-reticle" 
+                  ar-hit-test="requiredFeatures: hit-test;" 
+                  geometry="primitive: ring; radiusInner: 0.04; radiusOuter: 0.06" 
+                  material="color: #00FF00; shader: flat" 
+                  rotation="-90 0 0">
+        </a-entity>
+
+        <a-camera position="0 1.6 0"></a-camera>
+        
+    </a-scene>
+
+</body>
+</html>
